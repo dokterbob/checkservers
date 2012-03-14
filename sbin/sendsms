@@ -1,0 +1,23 @@
+#!/bin/sh
+
+CONFIGFILE=/etc/sendsms/config
+source $CONFIGFILE
+
+if [  -z "$1" -o -z "$2" ]
+  then
+  echo "usage: $0 <desination> <sender>"
+  exit 65
+fi
+
+MSG=$(cat)
+echo -n "Sending message '$MSG' from $2 to $1..."
+
+RES=`curl -s -d username="${USER}" -d password="${PASSWORD}" -d originator="$2" -d recipients="$1" -d gateway='1' -d message="$MSG" http://www.mollie.nl/xml/sms/ | grep '<success>true</success>' | wc -c`
+
+if [[ "$RES" == "0" ]]
+then
+    echo " error sending message, try later."
+    exit -1
+else
+    echo " message sent"
+fi
