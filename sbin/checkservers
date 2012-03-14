@@ -1,0 +1,125 @@
+#!/bin/bash
+
+CONFIGFILE=/etc/checkservers/config
+source $CONFIGFILE
+
+if [ `whoami`  != $CHECKSERVERUSER ]
+then
+    echo "Running as wrong user. Relaunching as $CHECKSERVERUSER."
+    sudo -u $CHECKSERVERUSER bash -i $BASH_SOURCE
+
+    exit $?
+fi
+
+if [ ! -r $CONFIGFILE ]
+then 
+    echo "Config file $CONFIGFILE not readable. Exiting."
+    exit -1
+fi
+
+if [ ! -r $URLFILE ]
+then
+    echo "URL list file $URLFILE not readable. Exiting."
+    exit -1
+fi
+
+if [ ! -w `dirname $STATEFILE` ]
+then
+    echo "Statefile $STATEFILE not writeable. Exiting."
+    exit -1
+fi
+
+if [ $INTERNETHOST ]
+then
+    echo -n "Checking internet connection... "
+    $PINGCMD $INTERNETHOST 1>/dev/null 2>> $LOGFILE
+    if [ $? == 0 ]
+    then
+        echo "ok"
+    else
+        echo "error!"
+        echo "No internet connection. Exiting." >> $LOGFILE
+        exit -1
+    fi
+fi
+
+# Test interactive shell
+case "$-" in
+*i*)    INTERACTIVE="yes" ;;
+*)      INTERACTIVE="no" ;;
+esac
+
+# Not to send message when in interactive shell or previously
+# erroneous state.
+SENDSMS="yes"
+if [ "$INTERACTIVE" == "yes" ]
+then
+    echo "Interactive shell. Not sending SMS."
+    SENDSMS="no"
+else
+    echo "Non interactive shell."
+    if [ -f "$STATEFILE" ]
+    then
+        echo "Last check was erroneous, not sending SMS."
+        SENDSMS="no"
+    fi
+fi
+
+echo
+
+ERROR="no"
+while read i
+do
+    if [ "$i" == "" -o  "${i:0:1}" == "#" -o "`echo $i | wc -w`" != "1" ]
+    then
+        continue
+    fi
+
+	echo -n "Checking $i... "
+	$CURL $i >> $LOGFILE
+	
+    if [ $? == 0 ]
+	then
+        echo "ok"
+	else
+		echo "error!"
+		echo "Error with: $i" >&2
+		echo "Error with $i at $DATE" >> $LOGFILE
+
+		if [ "$SENDSMS" == "yes" -a "$ERROR" == "no" ]
+		then
+			echo "Error with website $i" | $SMS
+			echo "SMS sent" >&2
+		else
+			echo "No SMS sent."
+		fi
+        ERROR="yes"
+	fi
+done < $URLFILE
+
+if [ "$ERROR" == "no" ]
+then
+    echo
+    echo "Check done. There were no errors."
+	echo "Check done at $DATE, no errors" >> $LOGFILE
+    
+    if [ -f "$STATEFILE" ]
+    then
+        echo "System restored to normal state. Removing statefile." >&2
+        echo "System restored to normal state. Removing statefile." >> $LOGFILE
+        
+        rm -v $STATEFILE  
+
+        # On non-interactive shell, send SMS that all is fine now.
+        if [ "$INTERACTIVE" == "no" ]
+        then
+            echo "All websites restored to normal operation." | $SMS
+        fi
+    fi
+else
+    echo
+    echo "Check done. There were errors. Touching statefile."
+    echo "Check done at $DATE, ERRORS. Statefile touched." >> $LOGFILE
+    touch $STATEFILE
+fi
+

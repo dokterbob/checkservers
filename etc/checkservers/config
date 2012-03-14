@@ -1,0 +1,12 @@
+#!/bin/bash
+
+URLFILE=/etc/checkservers/urls
+ERROR=0
+LOGFILE=/var/log/checkservers
+STATEFILE=/var/state/checkservers/checkservers-sms
+CURL="env LOCALDOMAIN=\"visualspace.nl\" curl -k -f -s --connect-timeout 45 -m 350 --retry 20 --retry-max-time 300 -r 0-0 -o /dev/null"
+SMS="/usr/local/bin/sendsms 0644838131 checkserver"
+DATE=`date`
+INTERNETHOST=ping.xs4all.nl
+PINGCMD="ping -c 2"
+CHECKSERVERUSER="checkserver"
